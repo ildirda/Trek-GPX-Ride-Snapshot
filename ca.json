@@ -1,0 +1,43 @@
+{
+  "app.title": "Gràfica resum Trek (GPX)",
+
+  "menu.open": "Obrir fitxer",
+  "menu.copy": "Copiar gràfic",
+  "menu.export": "Exportar a PNG",
+  "menu.language_menu": "Idioma",
+  "menu.language_label": "Català",
+
+  "dialog.open.title": "Selecciona un fitxer GPX",
+  "dialog.open.gpx": "Fitxers GPX",
+  "dialog.open.all": "Tots els fitxers",
+  "dialog.save.title": "Desa gràfic com a PNG",
+  "dialog.save.default_name": "grafic.png",
+  "dialog.save.filter_png": "Imatge PNG",
+
+  "message.error.title": "Error",
+  "message.no_chart.title": "Sense gràfic",
+  "message.no_chart.body": "Primer genera un gràfic.",
+  "message.copy.error": "No s'ha pogut copiar el gràfic:\n{error}",
+  "message.save.error": "No s'ha pogut desar el gràfic:\n{error}",
+  "message.process.error": "No s'ha pogut processar el GPX:\n{error}",
+
+  "error.gpx.missing_power": "No s'han trobat dades <power> i <motor_power> al GPX.",
+  "error.clip.alloc": "No s'ha pogut reservar memòria pel bitmap.",
+  "error.clip.lock": "No s'ha pogut bloquejar la memòria del bitmap.",
+  "error.clip.open": "No s'ha pogut obrir el portaretalls.",
+  "error.clip.clear": "No s'ha pogut netejar el portaretalls.",
+  "error.clip.set": "No s'ha pogut enviar el bitmap al portaretalls.",
+
+  "figure.title": "Potència, bateria, ritme, km, temps i altura",
+  "figure.legend.hidden": "[ocult]",
+  "figure.legend.cyclist": "Ciclista",
+  "figure.legend.motor": "Motor",
+  "figure.legend.battery": "Bateria (%) + Nivell d'assistència",
+  "figure.legend.heartrate": "Ritme cardíac (bpm)",
+  "figure.legend.mean_cyclist": "Mitjana ciclista",
+  "figure.legend.mean_motor": "Mitjana motor",
+  "figure.axis.altitude": "Altura (m)",
+  "figure.axis.power": "Potència (W)",
+  "figure.axis.time": "Temps en moviment (minuts)",
+  "figure.axis.distance": "Distància (km)"
+}

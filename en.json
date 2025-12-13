@@ -1,0 +1,43 @@
+{
+  "app.title": "Trek chart overview (GPX)",
+
+  "menu.open": "Open file",
+  "menu.copy": "Copy chart",
+  "menu.export": "Export to PNG",
+  "menu.language_menu": "Language",
+  "menu.language_label": "English",
+
+  "dialog.open.title": "Select a GPX file",
+  "dialog.open.gpx": "GPX files",
+  "dialog.open.all": "All files",
+  "dialog.save.title": "Save chart as PNG",
+  "dialog.save.default_name": "chart.png",
+  "dialog.save.filter_png": "PNG image",
+
+  "message.error.title": "Error",
+  "message.no_chart.title": "No chart",
+  "message.no_chart.body": "Generate a chart first.",
+  "message.copy.error": "Could not copy the chart:\n{error}",
+  "message.save.error": "Could not save the chart:\n{error}",
+  "message.process.error": "Could not process the GPX:\n{error}",
+
+  "error.gpx.missing_power": "No <power> and <motor_power> data found in the GPX.",
+  "error.clip.alloc": "Could not allocate memory for the bitmap.",
+  "error.clip.lock": "Could not lock the bitmap memory.",
+  "error.clip.open": "Could not open the clipboard.",
+  "error.clip.clear": "Could not clear the clipboard.",
+  "error.clip.set": "Could not send the bitmap to the clipboard.",
+
+  "figure.title": "Power, battery, heart rate, km, time and elevation",
+  "figure.legend.hidden": "[hidden]",
+  "figure.legend.cyclist": "Rider",
+  "figure.legend.motor": "Motor",
+  "figure.legend.battery": "Battery (%) + Assistance Level",
+  "figure.legend.heartrate": "Heart rate (bpm)",
+  "figure.legend.mean_cyclist": "Rider average",
+  "figure.legend.mean_motor": "Motor average",
+  "figure.axis.altitude": "Elevation (m)",
+  "figure.axis.power": "Power (W)",
+  "figure.axis.time": "Moving time (minutes)",
+  "figure.axis.distance": "Distance (km)"
+}
