@@ -39,5 +39,22 @@
   "figure.axis.altitude": "Elevation (m)",
   "figure.axis.power": "Power (W)",
   "figure.axis.time": "Moving time (minutes)",
-  "figure.axis.distance": "Distance (km)"
+  "figure.axis.distance": "Distance (km)",
+
+  "dashboard.title": "Cycling Performance Analysis",
+  "dashboard.summary.total_distance": "Total Distance",
+  "dashboard.summary.total_time": "Total Time",
+  "dashboard.summary.max_rider_power": "Max Rider Power",
+  "dashboard.summary.max_motor_power": "Max Motor Power",
+  "dashboard.card.rider_power": "Rider Power",
+  "dashboard.card.motor_power": "Motor Power",
+  "dashboard.card.heartrate": "Heart Rate",
+  "dashboard.card.battery": "Battery",
+  "dashboard.card.elevation": "Elevation",
+  "dashboard.value.avg": "avg",
+  "dashboard.value.na": "n/a"
+  ,
+  "tooltip.time": "Time",
+  "tooltip.distance": "Distance",
+  "tooltip.elevation": "Elevation"
 }

@@ -39,5 +39,22 @@
   "figure.axis.altitude": "Altura (m)",
   "figure.axis.power": "Potència (W)",
   "figure.axis.time": "Temps en moviment (minuts)",
-  "figure.axis.distance": "Distància (km)"
+  "figure.axis.distance": "Distància (km)",
+
+  "dashboard.title": "Anàlisi del rendiment ciclista",
+  "dashboard.summary.total_distance": "Distància total",
+  "dashboard.summary.total_time": "Temps total",
+  "dashboard.summary.max_rider_power": "Potència màxima ciclista",
+  "dashboard.summary.max_motor_power": "Potència màxima motor",
+  "dashboard.card.rider_power": "Potència ciclista",
+  "dashboard.card.motor_power": "Potència motor",
+  "dashboard.card.heartrate": "Ritme cardíac",
+  "dashboard.card.battery": "Bateria",
+  "dashboard.card.elevation": "Desnivell",
+  "dashboard.value.avg": "mitj",
+  "dashboard.value.na": "n/d"
+  ,
+  "tooltip.time": "Temps",
+  "tooltip.distance": "Distància",
+  "tooltip.elevation": "Altura"
 }

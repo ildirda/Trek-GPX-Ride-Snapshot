@@ -1,42 +1,48 @@
 # Trek Ride Snapshot 🚴⚡📈
 
-**All your Trek ride metrics, in one chart.**  
+**All your Trek ride metrics, in one chart.**
 
-Open a GPX exported from the Trek app and instantly get a clean, shareable chart with **rider power**, **motor power**, **battery**, **heart rate**, **distance**, **moving time**, and an **elevation profile** — all in one place.
+A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with smoothing, see **battery** and **heart rate** when available, and get **elevation**, **moving time**, and **distance** in a single clean chart.
 
-> Desktop tool built with **Tkinter + Matplotlib**.
+> Built with **Tkinter + Matplotlib**.
 
 ---
 
 ## ✨ Features
 
-- ⚡ Rider vs motor power with smoothing (easy to read, less noise)
-- ⛰️ Elevation profile as a subtle background layer
-- ⏱️ Moving time (stops removed) on the main X-axis
-- 🛣️ Distance (km) on the top X-axis
-- 📉 Mean power lines for rider and motor
-- 🔋 Battery line (when present)
-- ❤️ Heart rate line (when present)
-- 🧩 Assist level markers (mode changes shown along the battery line, when present)
-- 🖱️ Legend hover highlight (dim everything else to focus)
-- 📋 Copy chart to Windows clipboard
-- 🖼️ Export to PNG
-- 🌍 Multi-language UI from simple `*.json` translation files (remembers last language)
-- 🧼 Click items in the **legend** to toggle visibility — you can hide/show any series to focus on what matters.
-- 😅 Yes, I know there’s no **speed** — but it doesn’t play nicely with the ranges of the other metrics. This chart is designed first and foremost to compare **rider vs. motor power** (plus battery/HR/elevation) without squeezing everything into unreadable scales. Speed is better explored in a dedicated speed-focused view where it can have its own axis and smoothing rules.
-
+- ⚡ **Rider vs motor power** with smoothing (easy to read, less noise)
+- 🧾 **Dashboard header** with key stats (distance, moving time, max rider/motor power)
+- 🧩 **Metric pills** (Rider / Motor / HR / Battery / Elevation) showing quick KPIs
+- 🖱️ **Toggle visibility:** click any pill to show/hide its series (great to declutter)
+- 🧼 **Focus mode on hover:** hover a pill to dim everything else and highlight that metric
+- 🧭 **Hover tooltip:** move the mouse over the chart to see time, distance, elevation and values at that point
+- ⛰️ **Elevation profile** as a subtle gradient background layer (with its own right Y axis)
+- ⏱️ **Moving time** (stops removed) on the main X-axis
+- 🛣️ **Distance (km)** on the top X-axis
+- 📉 **Mean power** lines for rider and motor
+- 🔋 **Battery line** (when present) + **assist level markers** (1–3) on mode changes
+- ❤️ **Heart rate line** (when present)
+- 📋 **Copy chart to Windows clipboard**
+- 🖼️ **Export to PNG**
+- 🌍 **Multi-language UI** via `*.json` translation files (remembers last language)
+- 😅 **No speed on purpose:** speed doesn’t play nicely with the ranges of the other metrics. This chart is designed first and foremost to compare **rider vs. motor power** (plus battery/HR/elevation) without squeezing everything into unreadable scales.
 
 ---
 
 ## 🧠 How it works (overview)
 
-- Resamples data every **10 seconds of active time**
+- Parses GPX trackpoints (`time`, `ele`, `lat`, `lon`)
+- Reads Trek-related extension fields:
+  - required: `power`, `motor_power`
+  - optional: `ebike_battery`, `heartrate`, `ebike_mode`
+- Computes distance (Haversine) and derives speed
+- Detects long stops (≥ 60s with near‑zero speed and both powers at 0) and removes them from **moving time**
+- Resamples data every **10 seconds** of active time
 - Applies smoothing:
-  - Power: **7-point + 5-point moving average**
+  - Power: **7‑point + 5‑point** moving average (edge‑preserving)
   - Elevation: light smoothing
-  - Battery / HR: smoothed when present (with interpolation when needed)
-- Detects assist-mode changes and collapses rapid toggles into a single final marker
-- Detects long stops (≥ 60s with near-zero speed and both powers at 0) and removes them from *moving time*
+  - Battery / HR: smoothed when present (NaNs interpolated when possible)
+- Detects assist-mode changes and collapses rapid toggles (<30s) into a single final marker
 
 ---
 
@@ -78,13 +84,18 @@ Steps:
 
 ## 🖼️ Screenshots
 
-**Default chart:**
-![Default chart](grafic01.png)
+**Default dashboard**
+![Default chart](./grafic01.png)
 
 --
 
-**Dimmed sections on hover legend**
-![Dimmed legend on hover](grafic02atenuat.png)
+**Hover a pill to focus (others dim)**
+![Dimmed on hover](./grafic02atenuat.png)
+
+--
+
+**Hover tooltip**
+![Tooltip](./grafic03tooltip.png)
 
 ---
 
@@ -98,7 +109,7 @@ Add a new language:
 3. Translate the values
 4. Run the app and pick it from the **Language** menu
 
-The last selected language is saved to `last_language.json`.
+The last selected language is saved to `last_language.json` (typically **gitignored**).
 
 ---
 
@@ -106,11 +117,11 @@ The last selected language is saved to `last_language.json`.
 
 ```text
 .
-├─ grafic.py                # main script
-├─ README.md                # this file
-├─ en.json                  # engligh translation
-├─ ca.json                  # catalan translation
-└─ last_language.json       # auto-generated, remembers last selected language
+├─ grafic.py                 # main script
+├─ README.md                 # this file
+├─ en.json                   # english translation
+├─ ca.json                   # catalan translation
+└─ last_language.json        # auto-generated, remembers last selected language
 ```
 
 ---
@@ -120,7 +131,7 @@ The last selected language is saved to `last_language.json`.
 - 🐞 **Issues & PRs:** open an issue or submit a PR with improvements or fixes.
 - 🌍 **Translations:** add a new language by creating a `*.json` file with the UI keys (tip: copy `en.json` as a starting point).
 - 🧾 **Bug reports:** include your **OS**, **Python version**, and the full **error/traceback** if available.
-- 🧩 **GPX parsing issues:** share a **redacted** GPX snippet that reproduces the problem (and note which fields are missing: `power`, `motor`, `battery`, `hr`).
+- 🧩 **GPX parsing issues:** share a **redacted** GPX snippet that reproduces the problem (and note which fields are missing: `power`, `motor_power`, `ebike_battery`, `heartrate`, `ebike_mode`).
 
 ---
 
