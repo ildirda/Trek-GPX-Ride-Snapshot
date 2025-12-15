@@ -67,6 +67,15 @@ pip install matplotlib numpy
 
 ## ▶️ Run
 
+### Option A — Windows EXE (recommended)
+
+1. Download `TrekRideSnapshot.exe` from **Releases**
+> 🔐 **Trust note (unsigned EXE):** this executable is **not code-signed**, but it is built **automatically by GitHub Actions** from this repository’s source code when a release tag is pushed. You can verify it by checking the workflow in `.github/workflows/release.yml`, reviewing the corresponding Actions run logs for the release, and (optionally) building it yourself with PyInstaller and comparing checksums.
+2. Double-click to launch
+3. Use **Open file** to pick your Trek-exported `.gpx`
+
+### Option B — Run from source (Python)
+
 ```bash
 python grafic.py
 ```
