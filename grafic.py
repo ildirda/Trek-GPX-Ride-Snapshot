@@ -29,6 +29,7 @@ from matplotlib.patches import FancyBboxPatch
 from matplotlib.colors import to_rgba
 from matplotlib.ticker import MaxNLocator
 from matplotlib.offsetbox import AnnotationBbox, TextArea, VPacker
+from matplotlib.widgets import RangeSlider
 import ctypes
 from ctypes import wintypes
 
@@ -745,13 +746,34 @@ def create_figure(data, t):
     x_max = float(np.nanmax(t_min)) if len(t_min) else 0.0
     tick_step_min = 10.0
     x_end = x_max if x_max > 0 else tick_step_min
-    base_ticks = np.arange(0.0, x_end + 1e-9, tick_step_min)
-    minute_ticks = base_ticks.tolist()
-    if not minute_ticks or abs(minute_ticks[-1] - x_end) > 1e-6:
-        minute_ticks.append(x_end)
-    minute_ticks = np.array(minute_ticks, dtype=float)
     ax1.set_xlim(0.0, x_end)
-    ax1.set_xticks(minute_ticks)
+
+    def update_time_ticks(x0, x1):
+        try:
+            x0 = float(x0)
+            x1 = float(x1)
+        except (TypeError, ValueError):
+            return
+        if not np.isfinite(x0) or not np.isfinite(x1) or x1 <= x0:
+            return
+
+        span = x1 - x0
+        preferred_steps = np.array([0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0], dtype=float)
+        target = span / 6.0
+        step = preferred_steps[-1]
+        for s in preferred_steps:
+            if s >= target:
+                step = float(s)
+                break
+
+        start = np.ceil(x0 / step) * step
+        ticks = np.arange(start, x1 + 1e-9, step, dtype=float)
+        if ticks.size < 2:
+            ticks = np.array([x0, x1], dtype=float)
+
+        ax1.set_xticks(ticks)
+
+    update_time_ticks(0.0, x_end)
     ax1.margins(x=0)
 
     ax1.yaxis.set_major_locator(MaxNLocator(nbins=5))
@@ -782,13 +804,23 @@ def create_figure(data, t):
     # --- top axis in km ---
     ax_top = ax1.twiny()
     ax_top.set_xlim(ax1.get_xlim())
-    seconds_ticks = minute_ticks * 60.0
+    seconds_ticks = np.array(ax1.get_xticks(), dtype=float) * 60.0
     km_labels = np.interp(seconds_ticks, data["binned_t"], binned_dist)
-    ax_top.set_xticks(minute_ticks)
+    ax_top.set_xticks(ax1.get_xticks())
     ax_top.set_xticklabels([f"{k:.1f}" for k in km_labels])
     ax_top.set_xlabel(t("figure.axis.distance"), labelpad=2)
     style_axes(ax_top, hide_bottom=True)
     ax_top.margins(x=0)
+
+    def sync_top_axis(_=None):
+        ax_top.set_xlim(ax1.get_xlim())
+        xticks = np.array(ax1.get_xticks(), dtype=float)
+        ax_top.set_xticks(xticks)
+        seconds_ticks = xticks * 60.0
+        km_labels = np.interp(seconds_ticks, data["binned_t"], binned_dist)
+        ax_top.set_xticklabels([f"{k:.1f}" for k in km_labels])
+
+    ax1.callbacks.connect("xlim_changed", sync_top_axis)
 
     # --- hover tooltip (details) ---
     hover_line = ax1.axvline(
@@ -1134,7 +1166,80 @@ def create_figure(data, t):
     # Margins: leave some space top/bottom
     # Leave enough space for the header/pills so they don't overlap the top X axis.
     plot_top = max(0.1, pill_y - 0.09)
-    fig.subplots_adjust(left=0.07, right=0.95, top=plot_top, bottom=0.10)
+    fig.subplots_adjust(left=0.07, right=0.95, top=plot_top, bottom=0.18)
+
+    # --- bottom range slider for time zoom ---
+    if x_end > 0:
+        slider_left = 0.07
+        slider_right = 0.95
+        slider_bottom = 0.04
+        slider_height = 0.05
+        ax_slider = fig.add_axes([slider_left, slider_bottom, slider_right - slider_left, slider_height])
+        ax_slider.set_facecolor("#ffffff")
+        ax_slider.set_yticks([])
+        ax_slider.xaxis.set_ticks_position("top")
+
+        if x_end <= 60:
+            slider_step = 1.0
+        elif x_end <= 180:
+            slider_step = 5.0
+        else:
+            slider_step = 10.0
+        slider_ticks = np.arange(0.0, x_end + 1e-9, slider_step, dtype=float)
+        if len(slider_ticks) == 0 or abs(slider_ticks[-1] - x_end) > 1e-6:
+            slider_ticks = np.append(slider_ticks, x_end)
+        ax_slider.set_xticks(slider_ticks)
+        ax_slider.tick_params(axis="x", colors=axis_color, labelsize=7, length=2, width=0.8, pad=2)
+        for spine in ax_slider.spines.values():
+            spine.set_color(spine_color)
+            spine.set_linewidth(1.0)
+
+        time_slider = RangeSlider(ax_slider, "", 0.0, x_end, valinit=(0.0, x_end))
+        time_slider.label.set_visible(False)
+        time_slider.valtext.set_visible(False)
+        time_slider.track.set_facecolor("#f1f5f9")
+        time_slider.poly.set_facecolor("#cbd5e1")
+        time_slider.poly.set_alpha(0.75)
+        try:
+            for handle in getattr(time_slider, "_handles", []) or []:
+                handle.set_color("#64748b")
+                handle.set_linewidth(6.0)
+        except Exception:
+            pass
+
+        def on_time_slider(val):
+            try:
+                x0, x1 = float(val[0]), float(val[1])
+            except Exception:
+                return
+            if not np.isfinite(x0) or not np.isfinite(x1):
+                return
+            if x1 - x0 <= 1e-6:
+                return
+            ax1.set_xlim(x0, x1)
+            fig.canvas.draw_idle()
+
+        time_slider.on_changed(on_time_slider)
+
+        slider_drag_state = {"active": False}
+
+        def on_slider_press(event):
+            if event.inaxes == ax_slider:
+                slider_drag_state["active"] = True
+
+        def on_slider_release(event):
+            if not slider_drag_state["active"]:
+                return
+            slider_drag_state["active"] = False
+            x0, x1 = ax1.get_xlim()
+            update_time_ticks(x0, x1)
+            sync_top_axis()
+            fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("button_press_event", on_slider_press)
+        fig.canvas.mpl_connect("button_release_event", on_slider_release)
+        fig._time_slider = time_slider
+        fig._time_slider_ax = ax_slider
 
     # IMPORTANT: do not call fig.tight_layout() here
 

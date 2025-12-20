@@ -16,6 +16,7 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
 - 🖱️ **Toggle visibility:** click any pill to show/hide its series (great to declutter)
 - 🧼 **Focus mode on hover:** hover a pill to dim everything else and highlight that metric
 - 🧭 **Hover tooltip:** move the mouse over the chart to see time, distance, elevation and values at that point
+- 🔎 **Zoom & pan:** use the bottom range slider to zoom in/out and navigate along the ride timeline
 - ⛰️ **Elevation profile** as a subtle gradient background layer (with its own right Y axis)
 - ⏱️ **Moving time** (stops removed) on the main X-axis
 - 🛣️ **Distance (km)** on the top X-axis
@@ -84,6 +85,7 @@ Steps:
 1. Pick a `.gpx` file exported from the Trek app
 2. The chart renders automatically
 3. Use the top menu to:
+4. Use the **bottom range slider** to zoom in/out and inspect specific segments
    - Open another file
    - Copy chart (Windows clipboard)
    - Export PNG
@@ -105,6 +107,11 @@ Steps:
 
 **Hover tooltip**
 ![Tooltip](./grafic03tooltip.png)
+
+--
+
+**Zoom range slider** 
+![Zoom slider](./grafic04zoom.png)
 
 ---
 
@@ -130,6 +137,10 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 ├─ README.md                 # this file
 ├─ en.json                   # english translation
 ├─ ca.json                   # catalan translation
+├─ grafic01.png              # optional screenshot
+├─ grafic02atenuat.png       # optional screenshot
+├─ grafic03tooltip.png       # optional screenshot
+├─ grafic04zoom.png          # optional screenshot (range slider)
 └─ last_language.json        # auto-generated, remembers last selected language
 ```
 
