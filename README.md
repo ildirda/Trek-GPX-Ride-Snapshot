@@ -16,7 +16,10 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
 - 🖱️ **Toggle visibility:** click any pill to show/hide its series (great to declutter)
 - 🧼 **Focus mode on hover:** hover a pill to dim everything else and highlight that metric
 - 🧭 **Hover tooltip:** move the mouse over the chart to see time, distance, elevation and values at that point
+- 🏘️ **Localities on the route:** reverse-geocoded town markers on the distance axis (optional weather notes)
+- 🌬️ **Wind context:** shows wind direction relative to your heading when weather is available
 - 🔎 **Zoom & pan:** use the bottom range slider to zoom in/out and navigate along the ride timeline
+- 📈 **Adaptive smoothing on zoom:** less smoothing as you zoom into shorter distance ranges
 - ⛰️ **Elevation profile** as a subtle gradient background layer (with its own right Y axis)
 - ⏱️ **Moving time** (stops removed) on the main X-axis
 - 🛣️ **Distance (km)** on the top X-axis
@@ -37,12 +40,15 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
   - required: `power`, `motor_power`
   - optional: `ebike_battery`, `heartrate`, `ebike_mode`
 - Computes distance (Haversine) and derives speed
-- Detects long stops (≥ 60s with near‑zero speed and both powers at 0) and removes them from **moving time**
+- Detects long stops (≥ 60s with near-zero speed and both powers at 0) and removes them from **moving time**
 - Resamples data every **10 seconds** of active time
+- Reverse-geocodes localities along the route (cached in `geocode_cache.json`)
+- Fetches weather snapshots for the start and localities, and classifies wind vs heading
 - Applies smoothing:
-  - Power: **7‑point + 5‑point** moving average (edge‑preserving)
+  - Power: **7-point + 5-point** moving average (edge-preserving)
   - Elevation: light smoothing
   - Battery / HR: smoothed when present (NaNs interpolated when possible)
+- Adjusts smoothing based on zoomed distance span (none <1 km; light 1-3; medium 3-7; heavy >7)
 - Detects assist-mode changes and collapses rapid toggles (<30s) into a single final marker
 
 ---
@@ -53,6 +59,8 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
 - Dependencies:
   - `matplotlib`
   - `numpy`
+
+> Weather data requires an OpenWeather API key. Put it in `openweather_api_key.json` (single line) or set `OPENWEATHER_API_KEY`.
 
 > Tkinter ships with Python on most desktop installs.
 
@@ -134,6 +142,7 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 ```text
 .
 ├─ grafic.py                 # main script
+├─ helpers/                  # app modules (app, gpx, plotting, weather, etc.)
 ├─ README.md                 # this file
 ├─ en.json                   # english translation
 ├─ ca.json                   # catalan translation
@@ -141,6 +150,7 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 ├─ grafic02atenuat.png       # optional screenshot
 ├─ grafic03tooltip.png       # optional screenshot
 ├─ grafic04zoom.png          # optional screenshot (range slider)
+├─ openweather_api_key.json  # optional OpenWeather API key (single line)
 └─ last_language.json        # auto-generated, remembers last selected language
 ```
 
@@ -163,6 +173,8 @@ On macOS/Linux this may not work — use **Export to PNG** instead.
 ---
 
 ## ⚠️ Disclaimer
+
+Note: the code includes optional rendering for car-event markers from a specific third-party log format. Those data are not generally available, so the feature is not advertised.
 
 This project is provided **as-is**, without warranty.  
 Not affiliated with or endorsed by Trek.
