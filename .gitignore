@@ -10,8 +10,7 @@ build/
 material/
 dist/
 TrekRideSnapshot.exe
-geocode_cache.json
-pill_state.json
-last_language.json
-openweather_api_key.json
-last_language.json
+config/geocode_cache.json
+config/pill_state.json
+config/last_language.json
+config/openweather_api_key.json

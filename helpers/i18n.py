@@ -7,9 +7,15 @@ def _project_root():
     module_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.dirname(module_dir)
 
+def _config_dir():
+    return os.path.join(_project_root(), "config")
+
+def _languages_dir():
+    return os.path.join(_project_root(), "languages")
+
 def load_translations(lang_code):
-    root_dir = _project_root()
-    path = os.path.join(root_dir, f"{lang_code}.json")
+    languages_dir = _languages_dir()
+    path = os.path.join(languages_dir, f"{lang_code}.json")
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -20,7 +26,9 @@ def load_translations(lang_code):
 
 def discover_languages():
     """Return [(code, label)] by scanning *.json files that contain a language label key."""
-    root_dir = _project_root()
+    root_dir = _languages_dir()
+    if not os.path.isdir(root_dir):
+        return []
     langs = []
     for fname in os.listdir(root_dir):
         if not fname.lower().endswith(".json"):
@@ -34,7 +42,7 @@ def discover_languages():
     return langs
 
 def load_last_language_selection():
-    root_dir = _project_root()
+    root_dir = _config_dir()
     path = os.path.join(root_dir, "last_language.json")
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -45,7 +53,7 @@ def load_last_language_selection():
         return None
 
 def save_last_language_selection(code):
-    root_dir = _project_root()
+    root_dir = _config_dir()
     path = os.path.join(root_dir, "last_language.json")
     try:
         with open(path, "w", encoding="utf-8") as f:

@@ -16,14 +16,17 @@ def _project_root():
     module_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.dirname(module_dir)
 
+def _config_dir():
+    return os.path.join(_project_root(), "config")
+
 def load_openweather_api_key():
     for env_name in _WEATHER_API_ENV_VARS:
         value = os.environ.get(env_name)
         if value:
             return value.strip()
 
-    root_dir = _project_root()
-    path = os.path.join(root_dir, _WEATHER_API_KEY_FILE)
+    config_dir = _config_dir()
+    path = os.path.join(config_dir, _WEATHER_API_KEY_FILE)
     try:
         with open(path, "r", encoding="utf-8") as f:
             value = f.read().strip()

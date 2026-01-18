@@ -16,6 +16,9 @@ def _project_root():
     module_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.dirname(module_dir)
 
+def _config_dir():
+    return os.path.join(_project_root(), "config")
+
 def normalize_locality_name(name):
     if not name:
         return None
@@ -123,8 +126,8 @@ def identify_localities_online(
     if len(binned_t) == 0:
         return []
 
-    root_dir = _project_root()
-    cache_path = os.path.join(root_dir, "geocode_cache.json")
+    config_dir = _config_dir()
+    cache_path = os.path.join(config_dir, "geocode_cache.json")
     cache = load_geocode_cache(cache_path)
 
     candidate_indices = []

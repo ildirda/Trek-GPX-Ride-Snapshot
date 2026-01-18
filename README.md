@@ -28,7 +28,7 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
 - ❤️ **Heart rate line** (when present)
 - 📋 **Copy chart to Windows clipboard**
 - 🖼️ **Export to PNG**
-- 🌍 **Multi-language UI** via `*.json` translation files (remembers last language)
+- 🌍 **Multi-language UI** via `languages/*.json` translation files (remembers last language)
 - 😅 **No speed on purpose:** speed doesn’t play nicely with the ranges of the other metrics. This chart is designed first and foremost to compare **rider vs. motor power** (plus battery/HR/elevation) without squeezing everything into unreadable scales.
 
 ---
@@ -60,7 +60,7 @@ A desktop GPX dashboard for Trek rides. Compare **rider vs motor power** with sm
   - `matplotlib`
   - `numpy`
 
-> Weather data requires an OpenWeather API key. Put it in `openweather_api_key.json` (single line) or set `OPENWEATHER_API_KEY`.
+> Weather data requires an OpenWeather API key. Put it in `config/openweather_api_key.json` (single line) or set `OPENWEATHER_API_KEY`.
 
 > Tkinter ships with Python on most desktop installs.
 
@@ -125,11 +125,11 @@ Steps:
 
 ## 🌍 Translations
 
-Translations live next to `grafic.py` as `*.json`.
+Translations live in `languages/*.json`.
 
 Add a new language:
-1. Copy an existing file (e.g. `en.json`)
-2. Rename it (e.g. `fr.json`)
+1. Copy an existing file (e.g. `languages/en.json`)
+2. Rename it (e.g. `languages/fr.json`)
 3. Translate the values
 4. Run the app and pick it from the **Language** menu
 
@@ -143,15 +143,20 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 .
 ├─ grafic.py                 # main script
 ├─ helpers/                  # app modules (app, gpx, plotting, weather, etc.)
+├─ languages/                # translation files
+│  ├─ en.json                # english translation
+│  └─ ca.json                # catalan translation
+├─ config/                   # json config/state files
+│  ├─ geocode_cache.json     # cached geocoding (optional)
+│  ├─ last_language.json     # auto-generated, remembers last language
+│  ├─ openweather_api_key.json  # optional OpenWeather API key (single line)
+│  └─ pill_state.json        # auto-generated pill visibility
 ├─ README.md                 # this file
-├─ en.json                   # english translation
-├─ ca.json                   # catalan translation
 ├─ grafic01.png              # optional screenshot
 ├─ grafic02atenuat.png       # optional screenshot
 ├─ grafic03tooltip.png       # optional screenshot
 ├─ grafic04zoom.png          # optional screenshot (range slider)
-├─ openweather_api_key.json  # optional OpenWeather API key (single line)
-└─ last_language.json        # auto-generated, remembers last selected language
+└─ material/                 # sample data and logs (optional)
 ```
 
 ---
@@ -159,7 +164,7 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 ## 🤝 Contributing
 
 - 🐞 **Issues & PRs:** open an issue or submit a PR with improvements or fixes.
-- 🌍 **Translations:** add a new language by creating a `*.json` file with the UI keys (tip: copy `en.json` as a starting point).
+- 🌍 **Translations:** add a new language by creating a `languages/*.json` file with the UI keys (tip: copy `languages/en.json` as a starting point).
 - 🧾 **Bug reports:** include your **OS**, **Python version**, and the full **error/traceback** if available.
 - 🧩 **GPX parsing issues:** share a **redacted** GPX snippet that reproduces the problem (and note which fields are missing: `power`, `motor_power`, `ebike_battery`, `heartrate`, `ebike_mode`).
 
