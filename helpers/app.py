@@ -2,6 +2,7 @@
 
 import math
 import os
+from datetime import datetime, timezone
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -18,7 +19,7 @@ from helpers.i18n import discover_languages, load_last_language_selection, load_
 from helpers.plotting import create_figure
 from helpers.state import load_pill_state
 from helpers.utils import debug_log, format_local_datetime
-from helpers.weather import get_weather_brief_data, get_weather_summary
+from helpers.weather import fetch_openweather_snapshot, format_weather_brief, get_weather_brief_data, get_weather_summary
 
 def _project_root():
     module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -89,11 +90,206 @@ def describe_wind_relative(wind_deg, heading_deg, t):
         return None
     wind_deg = wind_deg % 360.0
     heading_deg = heading_deg % 360.0
-    if angular_diff_deg(wind_deg, heading_deg) <= 90.0:
+    threshold_deg = 45.0
+    if angular_diff_deg(wind_deg, heading_deg) <= threshold_deg:
         return t("wind.relative.headwind")
-    if angular_diff_deg(wind_deg, (heading_deg + 180.0) % 360.0) <= 90.0:
+    if angular_diff_deg(wind_deg, (heading_deg + 180.0) % 360.0) <= threshold_deg:
         return t("wind.relative.tailwind")
     return t("wind.relative.crosswind")
+
+
+def _mean_number(values):
+    items = []
+    for value in values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(value):
+            continue
+        items.append(value)
+    if not items:
+        return None
+    return float(sum(items) / len(items))
+
+
+def _mean_angle_deg(values):
+    sin_sum = 0.0
+    cos_sum = 0.0
+    count = 0
+    for value in values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(value):
+            continue
+        rad = math.radians(value)
+        sin_sum += math.sin(rad)
+        cos_sum += math.cos(rad)
+        count += 1
+    if count == 0:
+        return None
+    if abs(sin_sum) < 1e-8 and abs(cos_sum) < 1e-8:
+        return None
+    return (math.degrees(math.atan2(sin_sum, cos_sum)) + 360.0) % 360.0
+
+
+def _dt_at_index(binned_dt, idx):
+    if binned_dt is None:
+        return None
+    if idx < 0 or idx >= len(binned_dt):
+        return None
+    dt_value = binned_dt[idx]
+    return dt_value if isinstance(dt_value, datetime) else None
+
+
+def _interpolate_dt(dt0, dt1, frac):
+    if dt0 is None and dt1 is None:
+        return None
+    if dt0 is None:
+        return dt1
+    if dt1 is None:
+        return dt0
+    try:
+        ts0 = float(dt0.timestamp())
+        ts1 = float(dt1.timestamp())
+    except Exception:
+        return dt0
+    ts = ts0 + (ts1 - ts0) * frac
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+
+def _sample_track_at_distance(binned_dist, binned_lat, binned_lon, binned_dt, target_dist):
+    if binned_dist is None or binned_lat is None or binned_lon is None:
+        return None, None, None
+    if len(binned_dist) == 0:
+        return None, None, None
+    try:
+        target = float(target_dist)
+    except (TypeError, ValueError):
+        return None, None, None
+    if not math.isfinite(target):
+        return None, None, None
+
+    idx = int(np.searchsorted(binned_dist, target))
+    if idx <= 0:
+        i0 = i1 = 0
+    elif idx >= len(binned_dist):
+        i0 = i1 = len(binned_dist) - 1
+    else:
+        i0 = idx - 1
+        i1 = idx
+
+    try:
+        d0 = float(binned_dist[i0])
+        d1 = float(binned_dist[i1])
+    except (TypeError, ValueError):
+        return None, None, None
+    if not math.isfinite(d0) or not math.isfinite(d1):
+        return None, None, None
+
+    if i0 == i1 or d0 == d1:
+        return binned_lat[i1], binned_lon[i1], _dt_at_index(binned_dt, i1)
+
+    frac = (target - d0) / (d1 - d0)
+    try:
+        lat0 = float(binned_lat[i0])
+        lat1 = float(binned_lat[i1])
+        lon0 = float(binned_lon[i0])
+        lon1 = float(binned_lon[i1])
+    except (TypeError, ValueError):
+        lat = None
+        lon = None
+    else:
+        if math.isfinite(lat0) and math.isfinite(lat1):
+            lat = lat0 + (lat1 - lat0) * frac
+        else:
+            lat = None
+        if math.isfinite(lon0) and math.isfinite(lon1):
+            lon = lon0 + (lon1 - lon0) * frac
+        else:
+            lon = None
+    dt0 = _dt_at_index(binned_dt, i0)
+    dt1 = _dt_at_index(binned_dt, i1)
+    return lat, lon, _interpolate_dt(dt0, dt1, frac)
+
+
+def _weather_speed_kmh(weather):
+    if not isinstance(weather, dict):
+        return None
+    speed = weather.get("wind_kmh")
+    if speed is None:
+        speed = weather.get("wind_ms")
+        if isinstance(speed, (int, float)) and math.isfinite(speed):
+            return float(speed) * 3.6
+    if isinstance(speed, (int, float)) and math.isfinite(speed):
+        return float(speed)
+    return None
+
+
+def _aggregate_weather_samples(samples):
+    if not samples:
+        return None
+    temps = []
+    wind_dirs = []
+    wind_speeds = []
+    for weather in samples:
+        if not isinstance(weather, dict):
+            continue
+        temp = weather.get("temp_c")
+        if isinstance(temp, (int, float)) and math.isfinite(temp):
+            temps.append(temp)
+        wind_deg = weather.get("wind_deg")
+        if isinstance(wind_deg, (int, float)) and math.isfinite(wind_deg):
+            wind_dirs.append(wind_deg)
+        speed = _weather_speed_kmh(weather)
+        if speed is not None:
+            wind_speeds.append(speed)
+    if not temps and not wind_dirs and not wind_speeds:
+        return None
+    aggregate = {}
+    temp_mean = _mean_number(temps)
+    if temp_mean is not None:
+        aggregate["temp_c"] = temp_mean
+    speed_mean = _mean_number(wind_speeds)
+    if speed_mean is not None:
+        aggregate["wind_kmh"] = speed_mean
+    wind_mean = _mean_angle_deg(wind_dirs)
+    if wind_mean is not None:
+        aggregate["wind_deg"] = wind_mean
+    return aggregate if aggregate else None
+
+
+def _segment_weather_samples(
+    start_dist,
+    end_dist,
+    binned_dist,
+    binned_lat,
+    binned_lon,
+    binned_dt,
+    lang="ca",
+):
+    try:
+        start = float(start_dist)
+        end = float(end_dist)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(start) or not math.isfinite(end):
+        return None
+    if end <= start:
+        return None
+
+    samples = []
+    for frac in (1.0 / 3.0, 2.0 / 3.0):
+        target = start + (end - start) * frac
+        lat, lon, when_dt = _sample_track_at_distance(binned_dist, binned_lat, binned_lon, binned_dt, target)
+        if lat is None or lon is None or when_dt is None:
+            continue
+        weather = fetch_openweather_snapshot(lat, lon, when_dt, lang=lang, allow_current_fallback=False)
+        if weather:
+            samples.append(weather)
+    return _aggregate_weather_samples(samples)
 
 class App(tk.Tk):
     def __init__(self):
@@ -121,7 +317,7 @@ class App(tk.Tk):
         self.title(self.t("app.title"))
 
         # Window size: a bit smaller than the figure
-        self.geometry("1200x600")
+        self.geometry("1500x600")
 
         # Main menu bar
         self.menubar = tk.Menu(self)
@@ -331,26 +527,163 @@ class App(tk.Tk):
                 data.get("binned_dt"),
                 lang="ca",
             )
-            for stay in data.get("locality_stays", []):
+            locality_stays = data.get("locality_stays", [])
+            locality_weather_segments = []
+            binned_t = data.get("binned_t")
+            binned_dist = data.get("binned_dist")
+            binned_lat = data.get("binned_lat")
+            binned_lon = data.get("binned_lon")
+            if (
+                locality_stays
+                and binned_t is not None
+                and binned_dist is not None
+                and binned_lat is not None
+                and binned_lon is not None
+                and len(binned_t)
+                and len(binned_dist)
+                and len(binned_lat)
+                and len(binned_lon)
+            ):
+                first_stay = locality_stays[0]
+                try:
+                    start_time = float(binned_t[0])
+                    start_dist = float(binned_dist[0])
+                    start_lat = float(binned_lat[0])
+                    start_lon = float(binned_lon[0])
+                except (TypeError, ValueError):
+                    start_time = None
+                    start_dist = None
+                    start_lat = None
+                    start_lon = None
+                segment_weather = _segment_weather_samples(
+                    start_dist,
+                    first_stay.get("distance_km"),
+                    binned_dist,
+                    binned_lat,
+                    binned_lon,
+                    data.get("binned_dt"),
+                    lang=self.lang,
+                )
+                if segment_weather:
+                    weather_brief = format_weather_brief(segment_weather)
+                    if weather_brief:
+                        heading_deg = compute_bearing_deg(
+                            start_lat,
+                            start_lon,
+                            first_stay.get("lat"),
+                            first_stay.get("lon"),
+                        )
+                        wind_label = None
+                        if heading_deg is not None:
+                            wind_label = describe_wind_relative(
+                                segment_weather.get("wind_deg"),
+                                heading_deg,
+                                self.t,
+                            )
+                        if wind_label:
+                            weather_brief = f"{weather_brief} ({wind_label})"
+                        if start_time is not None and first_stay.get("time") is not None:
+                            segment_time = (start_time + float(first_stay["time"])) / 2.0
+                            locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+
+            for idx, stay in enumerate(locality_stays):
                 lat = stay.get("lat")
                 lon = stay.get("lon")
                 when_dt = stay.get("datetime")
                 if lat is None or lon is None or when_dt is None:
                     continue
-                weather_brief, wind_deg = get_weather_brief_data(lat, lon, when_dt, lang=self.lang)
-                if weather_brief:
-                    heading_deg = heading_at_time(
-                        data.get("binned_t"),
+                weather_brief = None
+                wind_deg = None
+                heading_deg = None
+                prev_stay = locality_stays[idx - 1] if idx > 0 else None
+                if prev_stay:
+                    heading_deg = compute_bearing_deg(
+                        prev_stay.get("lat"),
+                        prev_stay.get("lon"),
+                        lat,
+                        lon,
+                    )
+                    segment_weather = _segment_weather_samples(
+                        prev_stay.get("distance_km"),
+                        stay.get("distance_km"),
+                        data.get("binned_dist"),
                         data.get("binned_lat"),
                         data.get("binned_lon"),
-                        stay.get("time"),
+                        data.get("binned_dt"),
+                        lang=self.lang,
                     )
+                    if segment_weather:
+                        weather_brief = format_weather_brief(segment_weather)
+                        wind_deg = segment_weather.get("wind_deg")
+
+                if weather_brief is None:
+                    weather_brief, wind_deg = get_weather_brief_data(lat, lon, when_dt, lang=self.lang)
+                if weather_brief:
+                    if heading_deg is None:
+                        heading_deg = heading_at_time(
+                            data.get("binned_t"),
+                            data.get("binned_lat"),
+                            data.get("binned_lon"),
+                            stay.get("time"),
+                        )
                     wind_label = None
                     if wind_deg is not None and heading_deg is not None:
                         wind_label = describe_wind_relative(wind_deg, heading_deg, self.t)
                     if wind_label:
                         weather_brief = f"{weather_brief} ({wind_label})"
                     stay["weather_brief"] = weather_brief
+                    if prev_stay and prev_stay.get("time") is not None and stay.get("time") is not None:
+                        segment_time = (float(prev_stay["time"]) + float(stay["time"])) / 2.0
+                        locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+
+            if locality_stays:
+                last_stay = locality_stays[-1]
+                if (
+                    binned_t is not None
+                    and binned_dist is not None
+                    and binned_lat is not None
+                    and binned_lon is not None
+                    and len(binned_t)
+                    and len(binned_dist)
+                    and len(binned_lat)
+                    and len(binned_lon)
+                ):
+                    end_time = float(binned_t[-1])
+                    end_dist = float(binned_dist[-1])
+                    end_lat = float(binned_lat[-1])
+                    end_lon = float(binned_lon[-1])
+                    segment_weather = _segment_weather_samples(
+                        last_stay.get("distance_km"),
+                        end_dist,
+                        binned_dist,
+                        binned_lat,
+                        binned_lon,
+                        data.get("binned_dt"),
+                        lang=self.lang,
+                    )
+                    if segment_weather:
+                        weather_brief = format_weather_brief(segment_weather)
+                        if weather_brief:
+                            heading_deg = compute_bearing_deg(
+                                last_stay.get("lat"),
+                                last_stay.get("lon"),
+                                end_lat,
+                                end_lon,
+                            )
+                            wind_label = None
+                            if heading_deg is not None:
+                                wind_label = describe_wind_relative(
+                                    segment_weather.get("wind_deg"),
+                                    heading_deg,
+                                    self.t,
+                                )
+                            if wind_label:
+                                weather_brief = f"{weather_brief} ({wind_label})"
+                            if last_stay.get("time") is not None:
+                                segment_time = (float(last_stay["time"]) + end_time) / 2.0
+                                locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+
+            data["locality_weather_segments"] = locality_weather_segments
             locality_names = {stay.get("name") for stay in data.get("locality_stays", []) if stay.get("name")}
             data["towns_visited"] = len(locality_names)
             data["weather_summary"] = weather_summary
@@ -363,7 +696,7 @@ class App(tk.Tk):
 
         self.last_data = data
         self.render_figure(data)
-        show_car_events_popup(path, self.t, parent=self, car_events=car_events)
+        # Car events remain in the chart, but no popup is shown.
 
     def copy_chart(self):
         if self.figure is None:

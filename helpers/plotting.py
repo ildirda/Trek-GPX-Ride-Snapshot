@@ -1,20 +1,27 @@
 # -*- coding: utf-8 -*-
 
+import os
+
 import numpy as np
+import matplotlib.image as mpimg
 from matplotlib.figure import Figure
 from matplotlib import transforms
 from matplotlib.colors import to_rgba
-from matplotlib.offsetbox import AnnotationBbox, TextArea, VPacker
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage, TextArea, VPacker
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.ticker import MaxNLocator
 from matplotlib.widgets import RangeSlider
 
 from helpers.state import save_pill_state
 
+def _project_root():
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(module_dir)
+
 def create_figure(data, t):
     # 1980 px wide, 21:9 aspect ratio
     dpi = 100
-    width_in = 1980 / dpi
+    width_in = (1500) / dpi
     # Add some vertical space for header + pills (keep it tight).
     height_in = ((1980 * 9 / 21) + 250) / dpi
     fig_width_px = width_in * dpi
@@ -33,6 +40,20 @@ def create_figure(data, t):
     ax1.set_zorder(1)
     ax1.patch.set_alpha(0)
 
+    def format_value_or_na(value, fmt):
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return t("dashboard.value.na")
+        return fmt(v) if np.isfinite(v) else t("dashboard.value.na")
+
+    def clean_label(key):
+        label = t(key)
+        stripped = label.lstrip()
+        while stripped and not stripped[0].isalnum():
+            stripped = stripped[1:].lstrip()
+        return stripped or label
+
     # Header (title, subtitle, key stats)
     header_title = t("dashboard.title")
     total_distance_km = data.get("total_distance_km")
@@ -41,45 +62,139 @@ def create_figure(data, t):
     max_motor_power = data.get("max_motor_power")
     towns_visited = data.get("towns_visited")
     car_events_count = data.get("car_events_count")
-    if total_distance_km is not None and total_time_min is not None and max_rider_power is not None and max_motor_power is not None:
-        summary = (
-            f'{t("dashboard.summary.total_distance")}: {float(total_distance_km):.1f} km     '
-            f'{t("dashboard.summary.total_time")}: {int(round(float(total_time_min)))} min     '
-            f'{t("dashboard.summary.max_rider_power")}: {int(round(float(max_rider_power)))} W     '
-            f'{t("dashboard.summary.max_motor_power")}: {int(round(float(max_motor_power)))} W'
-        )
-    else:
-        summary = ""
-
     weather_summary = data.get("weather_summary")
-    secondary_parts = []
-    if towns_visited is not None:
-        secondary_parts.append(f'{t("dashboard.summary.towns_visited")}: {int(round(float(towns_visited)))}')
-    if car_events_count is not None:
+
+    assets_dir = os.path.join(_project_root(), "assets")
+    icon_cache = {}
+
+    def desaturate_icon(image):
+        if image is None:
+            return None
+        arr = image.astype(float)
+        if arr.max() > 1.0:
+            arr = arr / 255.0
+        if arr.shape[-1] >= 4:
+            rgb = arr[..., :3]
+            alpha = arr[..., 3:4]
+        else:
+            rgb = arr[..., :3]
+            alpha = None
+        gray = (rgb[..., 0] * 0.299) + (rgb[..., 1] * 0.587) + (rgb[..., 2] * 0.114)
+        gray_rgb = np.stack([gray, gray, gray], axis=-1)
+        if alpha is not None:
+            out = np.concatenate([gray_rgb, alpha], axis=-1)
+        else:
+            out = gray_rgb
+        if image.dtype == np.uint8:
+            out = np.clip(out * 255.0, 0, 255).astype(np.uint8)
+        else:
+            out = out.astype(image.dtype)
+        return out
+
+    def load_icon(name):
+        if name in icon_cache:
+            return icon_cache[name]
+        path = os.path.join(assets_dir, name)
         try:
-            car_events_value = int(round(float(car_events_count)))
-        except (TypeError, ValueError):
-            car_events_value = None
-        if car_events_value is not None:
-            secondary_parts.append(f'{t("dashboard.summary.car_events")}: {car_events_value}')
-    if weather_summary:
-        secondary_parts.append(f'{t("dashboard.summary.initial_weather")}: {weather_summary}')
-    secondary_line = "     ".join(secondary_parts) if secondary_parts else ""
+            icon = mpimg.imread(path)
+            icon_cache[name] = desaturate_icon(icon)
+        except Exception:
+            icon_cache[name] = None
+        return icon_cache[name]
+
+    header_items = [
+        {
+            "icon": "ruta.png",
+            "label": clean_label("dashboard.summary.total_distance"),
+            "value": format_value_or_na(total_distance_km, lambda v: f"{v:.1f} km"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "temps.png",
+            "label": clean_label("dashboard.summary.total_time"),
+            "value": format_value_or_na(total_time_min, lambda v: f"{int(round(v))} min"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "Wciclista.png",
+            "label": clean_label("dashboard.summary.max_rider_power"),
+            "value": format_value_or_na(max_rider_power, lambda v: f"{int(round(v))} W"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "Wmotor.png",
+            "label": clean_label("dashboard.summary.max_motor_power"),
+            "value": format_value_or_na(max_motor_power, lambda v: f"{int(round(v))} W"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "pobles.png",
+            "label": clean_label("dashboard.summary.towns_visited"),
+            "value": format_value_or_na(towns_visited, lambda v: f"{int(round(v))}"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "cotxes.png",
+            "label": clean_label("dashboard.summary.car_events"),
+            "value": format_value_or_na(car_events_count, lambda v: f"{int(round(v))}"),
+            "weight": 1.0,
+        },
+        {
+            "icon": "clima.png",
+            "label": clean_label("dashboard.summary.initial_weather"),
+            "value": weather_summary if weather_summary else t("dashboard.value.na"),
+            "weight": 2.0,
+        },
+    ]
 
     fig.text(0.02, 0.965, header_title, ha="left", va="top", fontsize=14, color="#111827")
-    if summary:
-        fig.text(0.02, 0.905 - content_shift_frac, summary, ha="left", va="top", fontsize=9, color="#6b7280")
-    if secondary_line:
-        fig.text(0.02, 0.865 - content_shift_frac, secondary_line, ha="left", va="top", fontsize=9, color="#6b7280")
+    label_y = 0.905 - content_shift_frac
+    value_y = 0.875 - content_shift_frac
+    x_start = 0.02
+    x_end = 0.98
+    total_weight = sum(item["weight"] for item in header_items)
+    icon_zoom = 0.4
+    icon_size_px = 40.0 * icon_zoom
+    icon_gap_px = 14.0
+    icon_text_offset = (icon_size_px + icon_gap_px) / fig_width_px
+    icon_y = value_y + (label_y - value_y) * 0.25
+    x_pos = x_start
+    for item in header_items:
+        icon = load_icon(item["icon"]) if item.get("icon") else None
+        if icon is not None:
+            image = OffsetImage(icon, zoom=icon_zoom)
+            icon_box = AnnotationBbox(
+                image,
+                (x_pos, icon_y),
+                xycoords=fig.transFigure,
+                box_alignment=(0.0, 0.5),
+                frameon=False,
+            )
+            fig.add_artist(icon_box)
+            text_x = x_pos + icon_text_offset
+        else:
+            text_x = x_pos
+        fig.text(
+            text_x,
+            label_y,
+            item["label"],
+            ha="left",
+            va="top",
+            fontsize=8,
+            color="#6b7280",
+        )
+        fig.text(
+            text_x,
+            value_y,
+            item["value"],
+            ha="left",
+            va="top",
+            fontsize=10,
+            color="#111827",
+        )
+        x_pos += (x_end - x_start) * (item["weight"] / total_weight)
 
     # Pills (cards) row
-    def format_value_or_na(value, fmt):
-        try:
-            v = float(value)
-        except (TypeError, ValueError):
-            return t("dashboard.value.na")
-        return fmt(v) if np.isfinite(v) else t("dashboard.value.na")
-
     pill_shift_right_px = 0
     pill_shift_down_px = 85
     pill_x0, pill_y, pill_w, pill_h = (
@@ -247,9 +362,25 @@ def create_figure(data, t):
     else:
         smooth_ele_plot = smooth_ele
 
-    # Keep secondary Y axis starting at 0 for proportionality.
-    ele_ymin = 0.0
-    ele_ymax = max(smooth_ele_plot.max(), binned_ele.max()) + 10
+    # Use elevation min/max with a small margin so the background isn't anchored at zero.
+    ele_values = []
+    for series in (smooth_ele_plot, binned_ele):
+        if series is None or len(series) == 0:
+            continue
+        series = np.asarray(series, dtype=float)
+        series = series[np.isfinite(series)]
+        if series.size:
+            ele_values.append((float(series.min()), float(series.max())))
+    if ele_values:
+        ele_min = min(v[0] for v in ele_values)
+        ele_max = max(v[1] for v in ele_values)
+        span = ele_max - ele_min
+        margin = max(5.0, span * 0.05)
+        ele_ymin = ele_min - margin
+        ele_ymax = ele_max + margin
+    else:
+        ele_ymin = 0.0
+        ele_ymax = 1.0
 
     clip_poly = ax2.fill_between(t_min, smooth_ele_plot, ele_ymin, color="none", alpha=0.0, zorder=0)
     gradient_rows = 256
@@ -594,7 +725,7 @@ def create_figure(data, t):
                 solid_capstyle="round",
                 transform=ax_top.get_xaxis_transform(),
                 zorder=7,
-                clip_on=False,
+                clip_on=True,
             )
             car_event_markers.append(segment)
     else:
@@ -621,12 +752,14 @@ def create_figure(data, t):
                     alpha=0.85,
                     transform=ax_top.get_xaxis_transform(),
                     zorder=7,
+                    clip_on=True,
                 )
                 car_event_markers.append(car_event_line)
 
     locality_lines = []
     locality_texts = []
     locality_weather_texts = []
+    locality_weather_positions = []
     locality_stays = data.get("locality_stays", [])
     if locality_stays:
         locality_color = "#1f2937"
@@ -671,24 +804,27 @@ def create_figure(data, t):
                 clip_on=False,
             )
             locality_texts.append(text)
-            weather_label = stay.get("weather_brief")
-            if weather_label:
-                weather_text = ax1.text(
-                    time_min,
-                    distance_label_y,
-                    str(weather_label),
-                    transform=weather_transform,
-                    ha="center",
-                    va="bottom",
-                    fontsize=6,
-                    color="#6b7280",
-                    alpha=0.85,
-                    zorder=6,
-                    clip_on=False,
-                )
-            else:
-                weather_text = None
-            locality_weather_texts.append(weather_text)
+    locality_weather_segments = data.get("locality_weather_segments", [])
+    for segment in locality_weather_segments:
+        time_min = float(segment.get("time", 0.0)) / 60.0
+        label = segment.get("label")
+        if not label or not np.isfinite(time_min):
+            continue
+        weather_text = ax1.text(
+            time_min,
+            distance_label_y,
+            str(label),
+            transform=weather_transform,
+            ha="center",
+            va="bottom",
+            fontsize=6,
+            color="#6b7280",
+            alpha=0.85,
+            zorder=6,
+            clip_on=False,
+        )
+        locality_weather_texts.append(weather_text)
+        locality_weather_positions.append(time_min)
 
     def update_range_visibility(x0, x1):
         try:
@@ -712,10 +848,9 @@ def create_figure(data, t):
             line.set_visible(visible)
             if idx < len(locality_texts):
                 locality_texts[idx].set_visible(visible)
-            if idx < len(locality_weather_texts):
-                weather_text = locality_weather_texts[idx]
-                if weather_text is not None:
-                    weather_text.set_visible(visible)
+        for weather_text, x_pos in zip(locality_weather_texts, locality_weather_positions):
+            visible = in_range(x_pos) if x_pos is not None else False
+            weather_text.set_visible(visible)
 
         battery_visible = bool(line_battery is not None and line_battery.get_visible())
         for marker in mode_markers:
@@ -845,13 +980,13 @@ def create_figure(data, t):
     all_artists.add(elevation_fill)
     all_artists.update(locality_lines)
     all_artists.update(locality_texts)
-    all_artists.update([text for text in locality_weather_texts if text is not None])
+    all_artists.update(locality_weather_texts)
     all_artists.update(car_event_markers)
 
     base_alpha = {artist: (artist.get_alpha() if artist.get_alpha() is not None else 1.0) for artist in all_artists}
     dim_factor = 0.2
     active_target = None
-    locality_artists = set(locality_lines) | set(locality_texts) | {text for text in locality_weather_texts if text is not None}
+    locality_artists = set(locality_lines) | set(locality_texts) | set(locality_weather_texts)
 
     pill_inactive_face = "#ffffff"
     pill_inactive_edge = "#e5e7eb"
