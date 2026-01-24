@@ -29,7 +29,8 @@ jobs:
       - name: Build EXE (PyInstaller)
         run: |
           pyinstaller --onefile --windowed --name "TrekRideSnapshot" `
-            --add-data "en.json;." --add-data "ca.json;." `
+            --add-data "languages/en.json;languages" --add-data "languages/ca.json;languages" `
+            --add-data "assets;assets" `
             grafic.py
 
       - name: Upload EXE to GitHub Release
