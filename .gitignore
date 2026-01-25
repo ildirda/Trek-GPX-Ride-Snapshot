@@ -14,3 +14,5 @@ config/geocode_cache.json
 config/pill_state.json
 config/last_language.json
 config/openweather_api_key.json
+config/weather_cache.json
+/exportats

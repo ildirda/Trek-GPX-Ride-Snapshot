@@ -104,22 +104,22 @@ Steps:
 ## 🖼️ Screenshots
 
 **Default dashboard**
-![Default chart](./grafic01.png)
+![Default chart](./assets/grafic01.png)
 
 --
 
 **Hover a pill to focus (others dim)**
-![Dimmed on hover](./grafic02atenuat.png)
+![Dimmed on hover](./assets/grafic02atenuat.png)
 
 --
 
 **Hover tooltip**
-![Tooltip](./grafic03tooltip.png)
+![Tooltip](./assets/grafic03tooltip.png)
 
 --
 
 **Zoom range slider** 
-![Zoom slider](./grafic04zoom.png)
+![Zoom slider](./assets/grafic04zoom.png)
 
 ---
 
@@ -141,22 +141,14 @@ The last selected language is saved to `last_language.json` (typically **gitigno
 
 ```text
 .
-├─ grafic.py                 # main script
-├─ helpers/                  # app modules (app, gpx, plotting, weather, etc.)
-├─ languages/                # translation files
-│  ├─ en.json                # english translation
-│  └─ ca.json                # catalan translation
-├─ config/                   # json config/state files
-│  ├─ geocode_cache.json     # cached geocoding (optional)
-│  ├─ last_language.json     # auto-generated, remembers last language
+├─ grafic.py                    # main script
+├─ helpers/                     # app modules (app, gpx, plotting, weather, etc.)
+├─ languages/                   # translation files
+├─ config/                      # json config/state files
+│  ├─ last_language.json        # auto-generated, remembers last language
 │  ├─ openweather_api_key.json  # optional OpenWeather API key (single line)
-│  └─ pill_state.json        # auto-generated pill visibility
-├─ README.md                 # this file
-├─ grafic01.png              # optional screenshot
-├─ grafic02atenuat.png       # optional screenshot
-├─ grafic03tooltip.png       # optional screenshot
-├─ grafic04zoom.png          # optional screenshot (range slider)
-└─ material/                 # sample data and logs (optional)
+│  └─ pill_state.json           # auto-generated pill visibility
+└─ README.md                    # this file
 ```
 
 ---

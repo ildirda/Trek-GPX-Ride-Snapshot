@@ -2,6 +2,7 @@
 
 import math
 import os
+import re
 from datetime import datetime, timezone
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -15,11 +16,24 @@ from helpers.clipboard_utils import copy_figure_to_windows_clipboard
 from helpers.errors import LocalizedError
 from helpers.geocode import identify_localities_online, reverse_geocode_locality
 from helpers.gpx import compute_moving_binned_data, parse_gpx
-from helpers.i18n import discover_languages, load_last_language_selection, load_translations, save_last_language_selection
+from helpers.i18n import (
+    discover_languages,
+    get_api_language_code,
+    load_last_language_selection,
+    load_translations,
+    save_last_language_selection,
+)
 from helpers.plotting import create_figure
 from helpers.state import load_pill_state
-from helpers.utils import debug_log, format_local_datetime
-from helpers.weather import fetch_openweather_snapshot, format_weather_brief, get_weather_brief_data, get_weather_summary
+from helpers.utils import debug_log, format_local_datetime, format_ride_title
+from helpers.weather import (
+    fetch_openweather_snapshot_cached,
+    format_weather_brief,
+    get_weather_brief_data,
+    get_weather_summary,
+    load_weather_cache,
+    save_weather_cache,
+)
 
 def _project_root():
     module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -80,7 +94,7 @@ def angular_diff_deg(a, b):
     return abs(diff)
 
 
-def describe_wind_relative(wind_deg, heading_deg, t):
+def wind_relative_key(wind_deg, heading_deg):
     try:
         wind_deg = float(wind_deg)
         heading_deg = float(heading_deg)
@@ -88,14 +102,31 @@ def describe_wind_relative(wind_deg, heading_deg, t):
         return None
     if not math.isfinite(wind_deg) or not math.isfinite(heading_deg):
         return None
-    wind_deg = wind_deg % 360.0
-    heading_deg = heading_deg % 360.0
-    threshold_deg = 45.0
-    if angular_diff_deg(wind_deg, heading_deg) <= threshold_deg:
-        return t("wind.relative.headwind")
-    if angular_diff_deg(wind_deg, (heading_deg + 180.0) % 360.0) <= threshold_deg:
-        return t("wind.relative.tailwind")
-    return t("wind.relative.crosswind")
+    rel_deg = (wind_deg - heading_deg) % 360.0
+    if rel_deg <= 45.0 or rel_deg >= 315.0:
+        return "wind.relative.headwind"
+    if rel_deg <= 75.0 or rel_deg >= 285.0:
+        return "wind.relative.cross_headwind"
+    if rel_deg <= 105.0 or rel_deg >= 255.0:
+        return "wind.relative.crosswind"
+    if rel_deg <= 135.0 or rel_deg >= 225.0:
+        return "wind.relative.cross_tailwind"
+    return "wind.relative.tailwind"
+
+def describe_wind_relative(wind_deg, heading_deg, t):
+    key = wind_relative_key(wind_deg, heading_deg)
+    return t(key) if key else None
+
+def _safe_filename(value, fallback):
+    if not isinstance(value, str):
+        return fallback
+    name = value.strip()
+    if not name:
+        return fallback
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "-", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    name = name.rstrip(" .")
+    return name or fallback
 
 
 def _mean_number(values):
@@ -269,6 +300,7 @@ def _segment_weather_samples(
     binned_lon,
     binned_dt,
     lang="ca",
+    cache=None,
 ):
     try:
         start = float(start_dist)
@@ -286,7 +318,14 @@ def _segment_weather_samples(
         lat, lon, when_dt = _sample_track_at_distance(binned_dist, binned_lat, binned_lon, binned_dt, target)
         if lat is None or lon is None or when_dt is None:
             continue
-        weather = fetch_openweather_snapshot(lat, lon, when_dt, lang=lang, allow_current_fallback=False)
+        weather = fetch_openweather_snapshot_cached(
+            lat,
+            lon,
+            when_dt,
+            lang=lang,
+            allow_current_fallback=False,
+            cache=cache,
+        )
         if weather:
             samples.append(weather)
     return _aggregate_weather_samples(samples)
@@ -312,6 +351,7 @@ class App(tk.Tk):
 
         self.lang = default_lang
         self.translations = load_translations(self.lang)
+        self.api_lang = get_api_language_code(self.lang, self.translations)
         self.lang_var = tk.StringVar(value=self.lang)
 
         self.title(self.t("app.title"))
@@ -375,11 +415,14 @@ class App(tk.Tk):
     def set_language(self, lang_code):
         self.lang = lang_code
         self.translations = load_translations(lang_code)
+        self.api_lang = get_api_language_code(lang_code, self.translations)
         self.lang_var.set(lang_code)
         save_last_language_selection(lang_code)
         self.update_menu_labels()
         self.title(self.t("app.title"))
         if self.last_data is not None:
+            self.refresh_weather_labels()
+            self.refresh_title()
             self.render_figure(self.last_data)
 
     def update_menu_labels(self):
@@ -396,6 +439,46 @@ class App(tk.Tk):
         for code, idx in self.language_menu_indices.items():
             label = self.language_labels.get(code, code)
             self.language_menu.entryconfig(idx, label=label)
+
+    def refresh_weather_labels(self):
+        if not isinstance(self.last_data, dict):
+            return
+        segments = self.last_data.get("locality_weather_segments")
+        if isinstance(segments, list):
+            for segment in segments:
+                base = segment.get("weather_brief_base")
+                if not base:
+                    continue
+                wind_key = segment.get("wind_key")
+                label = base
+                if wind_key:
+                    wind_label = self.t(wind_key)
+                    if wind_label:
+                        label = f"{base} ({wind_label})"
+                segment["label"] = label
+        stays = self.last_data.get("locality_stays")
+        if isinstance(stays, list):
+            for stay in stays:
+                base = stay.get("weather_brief_base")
+                if not base:
+                    continue
+                wind_key = stay.get("wind_key")
+                label = base
+                if wind_key:
+                    wind_label = self.t(wind_key)
+                    if wind_label:
+                        label = f"{base} ({wind_label})"
+                stay["weather_brief"] = label
+
+    def refresh_title(self):
+        if not isinstance(self.last_data, dict):
+            return
+        title_dt = self.last_data.get("title_dt")
+        title = format_ride_title(title_dt, self.t, self.lang) if title_dt else None
+        if title:
+            self.last_data["title"] = title
+        else:
+            self.last_data.pop("title", None)
 
     def show_loading(self, message):
         if self.loading_window is not None:
@@ -471,6 +554,22 @@ class App(tk.Tk):
             data = compute_moving_binned_data(
                 times, powers, motor_powers, batteries, heartrates, cadences, ebike_modes, elevs, lats, lons
             )
+            api_lang = self.api_lang if isinstance(self.api_lang, str) and self.api_lang else self.lang
+            weather_cache_path = os.path.join(_project_root(), "config", "weather_cache.json")
+            gpx_name = os.path.basename(path)
+            weather_cache = load_weather_cache(weather_cache_path)
+            gpx_cache = weather_cache.get(gpx_name)
+            if not isinstance(gpx_cache, dict):
+                gpx_cache = {}
+            lang_cache = gpx_cache.get(api_lang)
+            if not isinstance(lang_cache, dict):
+                lang_cache = {}
+            start_dt = times[0] if len(times) else None
+            title = format_ride_title(start_dt, self.t, self.lang)
+            if title:
+                data["title"] = title
+            if start_dt is not None:
+                data["title_dt"] = start_dt
             car_events = load_car_events(path)
             if car_events:
                 min_speed_kmh = 5.0
@@ -493,16 +592,17 @@ class App(tk.Tk):
                 )
                 data["car_events_count"] = len(car_event_times_min)
                 car_events["count"] = len(car_event_times_min)
+                data["has_car_events"] = True
             else:
                 car_events = None
+                data["has_car_events"] = False
             weather_summary = None
-            if len(times) and len(lats) and len(lons):
+            if start_dt is not None and len(lats) and len(lons):
                 start_lat = lats[0]
                 start_lon = lons[0]
-                start_dt = times[0]
                 place_label = None
                 try:
-                    place_label = reverse_geocode_locality(start_lat, start_lon, lang=self.lang)
+                    place_label = reverse_geocode_locality(start_lat, start_lon, lang=api_lang)
                 except Exception:
                     place_label = None
                 if not place_label:
@@ -513,8 +613,9 @@ class App(tk.Tk):
                     start_lat,
                     start_lon,
                     start_dt,
-                    lang=self.lang,
+                    lang=api_lang,
                     logger=debug_log,
+                    cache=lang_cache,
                 )
                 if weather_summary:
                     debug_log(f"Dades del temps: {weather_summary}")
@@ -525,7 +626,7 @@ class App(tk.Tk):
                 data.get("binned_lat"),
                 data.get("binned_lon"),
                 data.get("binned_dt"),
-                lang="ca",
+                lang=api_lang,
             )
             locality_stays = data.get("locality_stays", [])
             locality_weather_segments = []
@@ -562,29 +663,35 @@ class App(tk.Tk):
                     binned_lat,
                     binned_lon,
                     data.get("binned_dt"),
-                    lang=self.lang,
+                    lang=api_lang,
+                    cache=lang_cache,
                 )
                 if segment_weather:
-                    weather_brief = format_weather_brief(segment_weather)
-                    if weather_brief:
+                    weather_brief_base = format_weather_brief(segment_weather)
+                    if weather_brief_base:
                         heading_deg = compute_bearing_deg(
                             start_lat,
                             start_lon,
                             first_stay.get("lat"),
                             first_stay.get("lon"),
                         )
-                        wind_label = None
+                        wind_key = None
                         if heading_deg is not None:
-                            wind_label = describe_wind_relative(
-                                segment_weather.get("wind_deg"),
-                                heading_deg,
-                                self.t,
-                            )
+                            wind_key = wind_relative_key(segment_weather.get("wind_deg"), heading_deg)
+                        wind_label = self.t(wind_key) if wind_key else None
+                        weather_brief = weather_brief_base
                         if wind_label:
-                            weather_brief = f"{weather_brief} ({wind_label})"
+                            weather_brief = f"{weather_brief_base} ({wind_label})"
                         if start_time is not None and first_stay.get("time") is not None:
                             segment_time = (start_time + float(first_stay["time"])) / 2.0
-                            locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+                            locality_weather_segments.append(
+                                {
+                                    "time": segment_time,
+                                    "label": weather_brief,
+                                    "weather_brief_base": weather_brief_base,
+                                    "wind_key": wind_key,
+                                }
+                            )
 
             for idx, stay in enumerate(locality_stays):
                 lat = stay.get("lat")
@@ -610,15 +717,23 @@ class App(tk.Tk):
                         data.get("binned_lat"),
                         data.get("binned_lon"),
                         data.get("binned_dt"),
-                        lang=self.lang,
+                        lang=api_lang,
+                        cache=lang_cache,
                     )
                     if segment_weather:
                         weather_brief = format_weather_brief(segment_weather)
                         wind_deg = segment_weather.get("wind_deg")
 
                 if weather_brief is None:
-                    weather_brief, wind_deg = get_weather_brief_data(lat, lon, when_dt, lang=self.lang)
+                    weather_brief, wind_deg = get_weather_brief_data(
+                        lat,
+                        lon,
+                        when_dt,
+                        lang=api_lang,
+                        cache=lang_cache,
+                    )
                 if weather_brief:
+                    weather_brief_base = weather_brief
                     if heading_deg is None:
                         heading_deg = heading_at_time(
                             data.get("binned_t"),
@@ -626,15 +741,26 @@ class App(tk.Tk):
                             data.get("binned_lon"),
                             stay.get("time"),
                         )
-                    wind_label = None
+                    wind_key = None
                     if wind_deg is not None and heading_deg is not None:
-                        wind_label = describe_wind_relative(wind_deg, heading_deg, self.t)
+                        wind_key = wind_relative_key(wind_deg, heading_deg)
+                    wind_label = self.t(wind_key) if wind_key else None
+                    weather_brief = weather_brief_base
                     if wind_label:
-                        weather_brief = f"{weather_brief} ({wind_label})"
+                        weather_brief = f"{weather_brief_base} ({wind_label})"
+                    stay["weather_brief_base"] = weather_brief_base
+                    stay["wind_key"] = wind_key
                     stay["weather_brief"] = weather_brief
                     if prev_stay and prev_stay.get("time") is not None and stay.get("time") is not None:
                         segment_time = (float(prev_stay["time"]) + float(stay["time"])) / 2.0
-                        locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+                        locality_weather_segments.append(
+                            {
+                                "time": segment_time,
+                                "label": weather_brief,
+                                "weather_brief_base": weather_brief_base,
+                                "wind_key": wind_key,
+                            }
+                        )
 
             if locality_stays:
                 last_stay = locality_stays[-1]
@@ -659,34 +785,43 @@ class App(tk.Tk):
                         binned_lat,
                         binned_lon,
                         data.get("binned_dt"),
-                        lang=self.lang,
+                        lang=api_lang,
+                        cache=lang_cache,
                     )
                     if segment_weather:
-                        weather_brief = format_weather_brief(segment_weather)
-                        if weather_brief:
+                        weather_brief_base = format_weather_brief(segment_weather)
+                        if weather_brief_base:
                             heading_deg = compute_bearing_deg(
                                 last_stay.get("lat"),
                                 last_stay.get("lon"),
                                 end_lat,
                                 end_lon,
                             )
-                            wind_label = None
+                            wind_key = None
                             if heading_deg is not None:
-                                wind_label = describe_wind_relative(
-                                    segment_weather.get("wind_deg"),
-                                    heading_deg,
-                                    self.t,
-                                )
+                                wind_key = wind_relative_key(segment_weather.get("wind_deg"), heading_deg)
+                            wind_label = self.t(wind_key) if wind_key else None
+                            weather_brief = weather_brief_base
                             if wind_label:
-                                weather_brief = f"{weather_brief} ({wind_label})"
+                                weather_brief = f"{weather_brief_base} ({wind_label})"
                             if last_stay.get("time") is not None:
                                 segment_time = (float(last_stay["time"]) + end_time) / 2.0
-                                locality_weather_segments.append({"time": segment_time, "label": weather_brief})
+                                locality_weather_segments.append(
+                                    {
+                                        "time": segment_time,
+                                        "label": weather_brief,
+                                        "weather_brief_base": weather_brief_base,
+                                        "wind_key": wind_key,
+                                    }
+                                )
 
             data["locality_weather_segments"] = locality_weather_segments
             locality_names = {stay.get("name") for stay in data.get("locality_stays", []) if stay.get("name")}
             data["towns_visited"] = len(locality_names)
             data["weather_summary"] = weather_summary
+            gpx_cache[api_lang] = lang_cache
+            weather_cache[gpx_name] = gpx_cache
+            save_weather_cache(weather_cache_path, weather_cache)
         except Exception as e:
             self.hide_loading()
             messagebox.showerror(self.t("message.error.title"), self.format_error(e, "message.process.error"))
@@ -711,13 +846,22 @@ class App(tk.Tk):
         if self.figure is None:
             messagebox.showinfo(self.t("message.no_chart.title"), self.t("message.no_chart.body"))
             return
-        script_dir = _project_root()
+        project_root = _project_root()
+        export_dir = os.path.join(project_root, "exportats")
+        script_dir = export_dir if os.path.isdir(export_dir) else project_root
+        fallback_name = self.t("dialog.save.default_name")
+        title = None
+        if isinstance(self.last_data, dict):
+            title = self.last_data.get("title")
+        suggested_name = _safe_filename(title, fallback_name)
+        if not suggested_name.lower().endswith(".png"):
+            suggested_name = f"{suggested_name}.png"
         save_path = filedialog.asksaveasfilename(
             title=self.t("dialog.save.title"),
             defaultextension=".png",
             filetypes=[(self.t("dialog.save.filter_png"), "*.png")],
             initialdir=script_dir,
-            initialfile=self.t("dialog.save.default_name"),
+            initialfile=suggested_name,
         )
         if not save_path:
             return

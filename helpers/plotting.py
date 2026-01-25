@@ -55,7 +55,7 @@ def create_figure(data, t):
         return stripped or label
 
     # Header (title, subtitle, key stats)
-    header_title = t("dashboard.title")
+    header_title = data.get("title") or t("dashboard.title")
     total_distance_km = data.get("total_distance_km")
     total_time_min = data.get("total_time_min")
     max_rider_power = data.get("max_rider_power")
@@ -63,6 +63,9 @@ def create_figure(data, t):
     towns_visited = data.get("towns_visited")
     car_events_count = data.get("car_events_count")
     weather_summary = data.get("weather_summary")
+    has_car_events = data.get("has_car_events")
+    if has_car_events is None:
+        has_car_events = car_events_count is not None
 
     assets_dir = os.path.join(_project_root(), "assets")
     icon_cache = {}
@@ -133,19 +136,24 @@ def create_figure(data, t):
             "value": format_value_or_na(towns_visited, lambda v: f"{int(round(v))}"),
             "weight": 1.0,
         },
-        {
-            "icon": "cotxes.png",
-            "label": clean_label("dashboard.summary.car_events"),
-            "value": format_value_or_na(car_events_count, lambda v: f"{int(round(v))}"),
-            "weight": 1.0,
-        },
+    ]
+    if has_car_events:
+        header_items.append(
+            {
+                "icon": "cotxes.png",
+                "label": clean_label("dashboard.summary.car_events"),
+                "value": format_value_or_na(car_events_count, lambda v: f"{int(round(v))}"),
+                "weight": 1.0,
+            }
+        )
+    header_items.append(
         {
             "icon": "clima.png",
             "label": clean_label("dashboard.summary.initial_weather"),
             "value": weather_summary if weather_summary else t("dashboard.value.na"),
             "weight": 2.0,
-        },
-    ]
+        }
+    )
 
     fig.text(0.02, 0.965, header_title, ha="left", va="top", fontsize=14, color="#111827")
     label_y = 0.905 - content_shift_frac
@@ -626,6 +634,8 @@ def create_figure(data, t):
 
     # --- top axis in km ---
     ax_top = ax1.twiny()
+    ax_top.set_zorder(3)
+    ax_top.patch.set_alpha(0)
     distance_label_y = 1.0
     label_offset_px = 22
     weather_offset_px = 10
@@ -724,8 +734,8 @@ def create_figure(data, t):
                 alpha=0.85,
                 solid_capstyle="round",
                 transform=ax_top.get_xaxis_transform(),
-                zorder=7,
-                clip_on=True,
+                zorder=12,
+                clip_on=False,
             )
             car_event_markers.append(segment)
     else:
@@ -751,8 +761,8 @@ def create_figure(data, t):
                     color="#ef4444",
                     alpha=0.85,
                     transform=ax_top.get_xaxis_transform(),
-                    zorder=7,
-                    clip_on=True,
+                    zorder=12,
+                    clip_on=False,
                 )
                 car_event_markers.append(car_event_line)
 

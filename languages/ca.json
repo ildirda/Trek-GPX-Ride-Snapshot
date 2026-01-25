@@ -1,5 +1,6 @@
 {
   "app.title": "Gràfica resum Trek (GPX)",
+  "language.api_code": "ca-ES",
 
   "menu.open": "Obrir fitxer",
   "menu.copy": "Copiar gràfic",
@@ -48,6 +49,30 @@
   "figure.axis.distance": "Localitats i distància (km)",
 
   "dashboard.title": "Anàlisi de ruta",
+  "dashboard.title.template": "{weekday}, {day} de {month} de {year} a les {time}",
+  "dashboard.weekdays": [
+    "Dilluns",
+    "Dimarts",
+    "Dimecres",
+    "Dijous",
+    "Divendres",
+    "Dissabte",
+    "Diumenge"
+  ],
+  "dashboard.months": [
+    "Gener",
+    "Febrer",
+    "Març",
+    "Abril",
+    "Maig",
+    "Juny",
+    "Juliol",
+    "Agost",
+    "Setembre",
+    "Octubre",
+    "Novembre",
+    "Desembre"
+  ],
   "dashboard.summary.total_distance": "Distància total",
   "dashboard.summary.total_time": "Temps total",
   "dashboard.summary.max_rider_power": "W max ciclista",
@@ -69,6 +94,8 @@
   "tooltip.distance": "Distància",
   "tooltip.elevation": "Altura",
   "wind.relative.headwind": "en contra",
+  "wind.relative.cross_headwind": "creuat en contra",
   "wind.relative.tailwind": "a favor",
+  "wind.relative.cross_tailwind": "creuat a favor",
   "wind.relative.crosswind": "lateral"
 }

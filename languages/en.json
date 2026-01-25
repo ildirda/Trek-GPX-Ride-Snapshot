@@ -1,5 +1,6 @@
 {
   "app.title": "Trek chart overview (GPX)",
+  "language.api_code": "en_US",
 
   "menu.open": "Open file",
   "menu.copy": "Copy chart",
@@ -48,6 +49,30 @@
   "figure.axis.distance": "Localities and distance (km)",
 
   "dashboard.title": "Cycling Performance Analysis",
+  "dashboard.title.template": "{weekday}, {month} {day}, {year} at {time}",
+  "dashboard.weekdays": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday"
+  ],
+  "dashboard.months": [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ],
   "dashboard.summary.total_distance": "Total Distance",
   "dashboard.summary.total_time": "Total Time",
   "dashboard.summary.max_rider_power": "Max Rider Power",
@@ -69,6 +94,8 @@
   "tooltip.distance": "Distance",
   "tooltip.elevation": "Elevation",
   "wind.relative.headwind": "headwind",
+  "wind.relative.cross_headwind": "cross headwind",
   "wind.relative.tailwind": "tailwind",
+  "wind.relative.cross_tailwind": "cross tailwind",
   "wind.relative.crosswind": "crosswind"
 }

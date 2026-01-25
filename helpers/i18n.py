@@ -24,6 +24,23 @@ def load_translations(lang_code):
     except Exception:
         return {}
 
+def get_api_language_code(lang_code, translations=None):
+    data = translations if isinstance(translations, dict) else load_translations(lang_code)
+    api_code = None
+    if isinstance(data, dict):
+        api_code = (
+            data.get("language.api_code")
+            or data.get("language.code")
+            or data.get("language.locale")
+        )
+    if isinstance(api_code, str):
+        api_code = api_code.strip()
+    else:
+        api_code = ""
+    if not api_code:
+        api_code = lang_code if isinstance(lang_code, str) else ""
+    return api_code
+
 def discover_languages():
     """Return [(code, label)] by scanning *.json files that contain a language label key."""
     root_dir = _languages_dir()

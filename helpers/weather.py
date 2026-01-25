@@ -19,6 +19,23 @@ def _project_root():
 def _config_dir():
     return os.path.join(_project_root(), "config")
 
+def load_weather_cache(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+def save_weather_cache(path, cache):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=True, indent=2, sort_keys=True)
+    except Exception:
+        pass
+
 def load_openweather_api_key():
     for env_name in _WEATHER_API_ENV_VARS:
         value = os.environ.get(env_name)
@@ -35,6 +52,15 @@ def load_openweather_api_key():
         return None
     except Exception:
         return None
+
+def normalize_openweather_lang(lang):
+    if not isinstance(lang, str):
+        return ""
+    lang = lang.strip()
+    if not lang:
+        return ""
+    base = lang.split("-", 1)[0].split("_", 1)[0]
+    return base.lower()
 
 def fetch_json(url, timeout=6.0, logger=None, label=None):
     req = urllib.request.Request(
@@ -176,6 +202,7 @@ def fetch_openweather_snapshot(
     if when_dt.tzinfo is None:
         when_dt = when_dt.replace(tzinfo=timezone.utc)
     timestamp = int(when_dt.timestamp())
+    lang_param = normalize_openweather_lang(lang)
 
     params = {
         "lat": f"{lat_f:.5f}",
@@ -183,8 +210,9 @@ def fetch_openweather_snapshot(
         "dt": timestamp,
         "appid": api_key,
         "units": units,
-        "lang": lang,
     }
+    if lang_param:
+        params["lang"] = lang_param
     url = "https://api.openweathermap.org/data/3.0/onecall/timemachine?" + urllib.parse.urlencode(params)
     if logger:
         redacted_url = redact_url_query_param(url, "appid")
@@ -219,8 +247,9 @@ def fetch_openweather_snapshot(
         "lon": f"{lon_f:.5f}",
         "appid": api_key,
         "units": units,
-        "lang": lang,
     }
+    if lang_param:
+        params["lang"] = lang_param
     url = "https://api.openweathermap.org/data/2.5/weather?" + urllib.parse.urlencode(params)
     if logger:
         redacted_url = redact_url_query_param(url, "appid")
@@ -247,6 +276,64 @@ def fetch_openweather_snapshot(
         logger("Dades rebudes d'OpenWeather (actual)")
     if logger and not weather:
         logger("Resposta buida d'OpenWeather (actual)")
+    return weather
+
+def _weather_cache_key(lat, lon, when_dt, lang):
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(lat) or not np.isfinite(lon):
+        return None
+    if not isinstance(when_dt, datetime):
+        return None
+    if when_dt.tzinfo is None:
+        when_dt = when_dt.replace(tzinfo=timezone.utc)
+    ts = int(when_dt.timestamp())
+    lang_key = normalize_openweather_lang(lang)
+    return f"{lat:.4f},{lon:.4f},{ts},{lang_key}"
+
+def fetch_openweather_snapshot_cached(
+    lat,
+    lon,
+    when_dt,
+    lang="ca",
+    logger=None,
+    allow_current_fallback=False,
+    cache=None,
+):
+    if cache is None:
+        return fetch_openweather_snapshot(
+            lat,
+            lon,
+            when_dt,
+            lang=lang,
+            logger=logger,
+            allow_current_fallback=allow_current_fallback,
+        )
+    key = _weather_cache_key(lat, lon, when_dt, lang)
+    if key is None:
+        return fetch_openweather_snapshot(
+            lat,
+            lon,
+            when_dt,
+            lang=lang,
+            logger=logger,
+            allow_current_fallback=allow_current_fallback,
+        )
+    if key in cache:
+        cached = cache.get(key)
+        return cached or None
+    weather = fetch_openweather_snapshot(
+        lat,
+        lon,
+        when_dt,
+        lang=lang,
+        logger=logger,
+        allow_current_fallback=allow_current_fallback,
+    )
+    cache[key] = weather or None
     return weather
 
 def wind_direction_phrase(deg, lang="ca"):
@@ -353,19 +440,27 @@ def format_weather_brief(weather):
         return None
     return ", ".join(parts)
 
-def get_weather_summary(lat, lon, when_dt, lang="ca", logger=None, allow_current_fallback=False):
-    weather = fetch_openweather_snapshot(
+def get_weather_summary(lat, lon, when_dt, lang="ca", logger=None, allow_current_fallback=False, cache=None):
+    weather = fetch_openweather_snapshot_cached(
         lat,
         lon,
         when_dt,
         lang=lang,
         allow_current_fallback=allow_current_fallback,
         logger=logger,
+        cache=cache,
     )
     return format_weather_summary(weather, lang=lang)
 
-def get_weather_brief_data(lat, lon, when_dt, lang="ca"):
-    weather = fetch_openweather_snapshot(lat, lon, when_dt, lang=lang, allow_current_fallback=False)
+def get_weather_brief_data(lat, lon, when_dt, lang="ca", cache=None):
+    weather = fetch_openweather_snapshot_cached(
+        lat,
+        lon,
+        when_dt,
+        lang=lang,
+        allow_current_fallback=False,
+        cache=cache,
+    )
     if not isinstance(weather, dict):
         return None, None
     return format_weather_brief(weather), weather.get("wind_deg")
